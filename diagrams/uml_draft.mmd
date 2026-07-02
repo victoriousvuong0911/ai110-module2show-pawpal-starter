@@ -1,0 +1,95 @@
+classDiagram
+    direction LR
+
+    class Owner {
+        +str name
+        +time available_start
+        +time available_end
+        +dict preferences
+        +list~Pet~ pets
+        +add_pet(pet) None
+        +total_available_minutes() int
+        +describe() str
+    }
+
+    class Pet {
+        +str name
+        +str species
+        +str breed
+        +int age
+        +str notes
+        +list~Task~ tasks
+        +add_task(task) None
+        +remove_task(task) None
+        +tasks_by_priority() list~Task~
+        +describe() str
+    }
+
+    class Task {
+        +str name
+        +Category category
+        +int duration_minutes
+        +Priority priority
+        +str recurrence
+        +time preferred_time
+        +bool completed
+        +is_due_today(day) bool
+        +mark_done() None
+        +describe() str
+    }
+
+    class Scheduler {
+        +Owner owner
+        +int available_minutes
+        +str strategy
+        +sort_tasks(tasks) list~Task~
+        +filter_tasks(tasks) list~Task~
+        +resolve_conflicts(tasks) list~Task~
+        +generate_plan() DailyPlan
+        +explain() str
+    }
+
+    class DailyPlan {
+        +date date
+        +list~ScheduledTask~ entries
+        +list~Task~ skipped_tasks
+        +str reasoning
+        +add_entry(entry) None
+        +total_time() int
+        +unscheduled() list~Task~
+        +to_display() str
+    }
+
+    class ScheduledTask {
+        +Task task
+        +time start_time
+        +time end_time
+        +overlaps(other) bool
+        +describe() str
+    }
+
+    class Priority {
+        <<enumeration>>
+        HIGH
+        MEDIUM
+        LOW
+    }
+
+    class Category {
+        <<enumeration>>
+        WALK
+        FEEDING
+        MEDS
+        ENRICHMENT
+        GROOMING
+    }
+
+    Owner "1" o-- "*" Pet : owns
+    Pet "1" o-- "*" Task : has
+    Owner "1" --> "1" Scheduler : uses
+    Scheduler ..> Task : reads
+    Scheduler ..> DailyPlan : produces
+    DailyPlan "1" *-- "*" ScheduledTask : contains
+    ScheduledTask "1" --> "1" Task : wraps
+    Task ..> Priority : typed by
+    Task ..> Category : typed by

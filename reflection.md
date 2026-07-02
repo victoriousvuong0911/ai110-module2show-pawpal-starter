@@ -2,10 +2,16 @@
 
 ## 1. System Design
 
+- Add a pet info
+- Schedule a plan
+- Display the plan
+
 **a. Initial design**
 
 - Briefly describe your initial UML design.
 - What classes did you include, and what responsibilities did you assign to each?
+
+I chose `Owner`, `Pet`, and `Task` as data holders, a `Scheduler` engine that sorts/filters/resolves conflicts to produce a `DailyPlan` made of `ScheduledTask` time slots, with `Priority` and `Category` enums for type safety.
 
 **b. Design changes**
 
