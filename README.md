@@ -153,12 +153,32 @@ implemented feature to the method that provides it.
 
 ## 📸 Demo Walkthrough
 
-Describe your app in numbered steps so a reader can follow along without watching a video:
+**UI features (in `app.py`):** set owner name and availability in the sidebar; **Add a Pet**; **Schedule a Task** (title, category, duration, priority, optional preferred time); view **Current Tasks** with filters by pet/status; and click **Generate schedule** to build the day's plan.
 
-1. <!-- Describe this step -->
-2. <!-- Describe this step -->
-3. <!-- Describe this step -->
-4. <!-- Describe this step -->
-5. <!-- Add more steps as needed -->
+**Example workflow:**
 
-**Screenshot or video** *(optional)*: <!-- Insert a screenshot or link to a demo video here -->
+1. Set availability (e.g. 08:00–20:00) in the sidebar.
+2. **Add a pet** — e.g. "Biscuit" the dog.
+3. **Schedule tasks** — e.g. a walk at 08:00 and feeding at 09:00.
+4. Review the **Current Tasks** table (auto-sorted by time; filter by pet or status).
+5. Click **Generate schedule** to see today's plan.
+
+**Key Scheduler behaviors shown:** tasks are **sorted** chronologically / by priority, the plan is **packed** into time slots within the availability window, **completed tasks are excluded**, and **conflict warnings** appear when two fixed-time tasks overlap.
+
+**Sample CLI output** (`python main.py`):
+
+```text
+Conflict detection (detect_conflicts):
+  WARNING: 'Vitamins' (Biscuit) at 09:00 overlaps 'Feeding' (Whiskers) at 09:00.
+
+Today's Schedule
+Daily plan for 2026-07-02:
+  08:00 — Breakfast (10 min) [priority: high]
+  08:10 — Feeding (10 min) [priority: high]
+  08:20 — Play time (20 min) [priority: medium]
+  08:40 — Grooming (45 min) [priority: low]
+Warnings:
+  - 'Vitamins' (Biscuit) at 09:00 overlaps 'Feeding' (Whiskers) at 09:00.
+
+Total scheduled time: 85 min
+```
