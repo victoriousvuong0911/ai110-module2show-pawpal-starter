@@ -6,8 +6,8 @@ with scheduling logic.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from datetime import date, time
+from dataclasses import dataclass, field, replace
+from datetime import date, time, timedelta
 from enum import Enum
 
 
@@ -51,9 +51,13 @@ class Task:
     recurrence: str = "daily"          # "daily" | "weekly" | "once"
     preferred_time: time | None = None
     completed: bool = False
+    due_date: date | None = None       # the specific day this instance is for
 
     def is_due_today(self, day: date) -> bool:
-        """Return True if this task's recurrence rule makes it due on the given day."""
+        """Return True if this task is due on the given day."""
+        if self.due_date is not None:
+            return self.due_date == day
+        # Undated template: fall back to the recurrence rule.
         if self.recurrence == "daily":
             return True
         if self.recurrence == "once":
@@ -66,6 +70,26 @@ class Task:
     def mark_complete(self) -> None:
         """Mark this task as completed."""
         self.completed = True
+
+    def next_occurrence(self) -> "Task | None":
+        """Build the next scheduled instance of a recurring task.
+
+        Copies this task with ``completed`` reset to False and ``due_date``
+        advanced by the recurrence interval (daily = +1 day, weekly = +7 days).
+        The advance is measured from ``due_date`` if set, otherwise from today.
+
+        Returns:
+            A new Task for the next occurrence, or None for a "once" task
+            (or any non-recurring value) since it does not repeat.
+        """
+        if self.recurrence == "daily":
+            step = 1
+        elif self.recurrence == "weekly":
+            step = 7
+        else:  # "once" or unknown — does not repeat
+            return None
+        base = self.due_date or date.today()
+        return replace(self, completed=False, due_date=base + timedelta(days=step))
 
     def describe(self) -> str:
         """Return a human-readable summary of the task."""
@@ -86,6 +110,26 @@ class Pet:
     def add_task(self, task: Task) -> None:
         """Attach a care task to this pet."""
         self.tasks.append(task)
+
+    def complete_task(self, task: Task) -> Task | None:
+        """Mark a task complete and roll a recurring task forward.
+
+        Flips the task's status, then asks it for its next occurrence; if one
+        exists (daily/weekly), it is appended to this pet's task list so the
+        chore reappears on its next date.
+
+        Args:
+            task: A task already belonging to this pet.
+
+        Returns:
+            The newly created next-occurrence Task, or None if the task does
+            not repeat.
+        """
+        task.mark_complete()
+        upcoming = task.next_occurrence()
+        if upcoming is not None:
+            self.add_task(upcoming)
+        return upcoming
 
     def remove_task(self, task: Task) -> None:
         """Detach a care task from this pet (no-op if not present)."""
@@ -126,6 +170,35 @@ class Owner:
             tasks.extend(pet.tasks)
         return tasks
 
+    def find_tasks(
+        self,
+        completed: bool | None = None,
+        pet_name: str | None = None,
+    ) -> list[Task]:
+        """Return this owner's tasks, optionally filtered by status and/or pet.
+
+        Both filters are independent and compose; a value of None means "do not
+        filter on this field". Note that ``completed=False`` is a real filter
+        (pending tasks only), which is why membership is tested with ``is not
+        None`` rather than truthiness.
+
+        Args:
+            completed: If set, keep only tasks whose ``completed`` flag matches.
+            pet_name: If set, keep only tasks belonging to the pet with this name.
+
+        Returns:
+            A flat list of matching Task objects across all pets.
+        """
+        result: list[Task] = []
+        for pet in self.pets:
+            if pet_name is not None and pet.name != pet_name:
+                continue
+            for task in pet.tasks:
+                if completed is not None and task.completed != completed:
+                    continue
+                result.append(task)
+        return result
+
     def total_available_minutes(self) -> int:
         """Return the size of the owner's daily availability window in minutes."""
         return _to_minutes(self.available_end) - _to_minutes(self.available_start)
@@ -164,6 +237,7 @@ class DailyPlan:
     date: date
     entries: list[ScheduledTask] = field(default_factory=list)
     skipped_tasks: list[Task] = field(default_factory=list)
+    warnings: list[str] = field(default_factory=list)
     reasoning: str = ""
 
     def add_entry(self, entry: ScheduledTask) -> None:
@@ -190,6 +264,10 @@ class DailyPlan:
             lines.append("Skipped:")
             for task in self.skipped_tasks:
                 lines.append("  - " + task.name)
+        if self.warnings:
+            lines.append("Warnings:")
+            for warning in self.warnings:
+                lines.append("  - " + warning)
         return "\n".join(lines)
 
 
@@ -214,6 +292,25 @@ class Scheduler:
                 t.duration_minutes,
                 _to_minutes(t.preferred_time) if t.preferred_time else 24 * 60,
             ),
+        )
+
+    def sort_by_time(self, tasks: list[Task]) -> list[Task]:
+        """Order tasks chronologically by their preferred start time.
+
+        Uses ``sorted`` with a key that converts each ``preferred_time`` to
+        minutes-since-midnight. Tasks without a preferred time get a sentinel
+        key (end of day) so they sort last instead of raising when compared
+        against None.
+
+        Args:
+            tasks: The tasks to order (not mutated).
+
+        Returns:
+            A new list sorted earliest-first, untimed tasks trailing.
+        """
+        return sorted(
+            tasks,
+            key=lambda t: _to_minutes(t.preferred_time) if t.preferred_time else 24 * 60,
         )
 
     def filter_tasks(self, tasks: list[Task]) -> list[Task]:
@@ -248,6 +345,45 @@ class Scheduler:
 
         return kept + untimed
 
+    def detect_conflicts(self, tasks: list[Task]) -> list[str]:
+        """Detect fixed-time tasks whose slots overlap and describe each clash.
+
+        A lightweight O(n^2) pairwise scan over only the tasks that have a
+        ``preferred_time``. Two tasks conflict when their
+        ``[start, start + duration)`` minute-intervals overlap, so it catches
+        both exact matches and partial overlaps, within a pet or across pets.
+        It reports problems as text rather than raising, so a clash never
+        crashes plan generation.
+
+        Args:
+            tasks: The candidate tasks to check for time collisions.
+
+        Returns:
+            A list of human-readable warning strings (empty if none conflict).
+        """
+        timed = [t for t in tasks if t.preferred_time is not None]
+
+        def pet_of(task: Task) -> str:
+            for pet in self.owner.pets:
+                if task in pet.tasks:
+                    return pet.name
+            return "?"
+
+        warnings: list[str] = []
+        for i in range(len(timed)):
+            for j in range(i + 1, len(timed)):
+                a, b = timed[i], timed[j]
+                a_start = _to_minutes(a.preferred_time)
+                a_end = a_start + a.duration_minutes
+                b_start = _to_minutes(b.preferred_time)
+                b_end = b_start + b.duration_minutes
+                if a_start < b_end and b_start < a_end:
+                    warnings.append(
+                        f"'{a.name}' ({pet_of(a)}) at {a.preferred_time.strftime('%H:%M')} "
+                        f"overlaps '{b.name}' ({pet_of(b)}) at {b.preferred_time.strftime('%H:%M')}."
+                    )
+        return warnings
+
     def generate_plan(self) -> DailyPlan:
         """Build and return the daily plan for the owner's pets."""
         day = date.today()
@@ -257,10 +393,13 @@ class Scheduler:
             if not t.completed and t.is_due_today(day)
         ]
 
+        plan = DailyPlan(date=day)
+        # Flag clashing fixed-time requests before we resolve/serialize them.
+        plan.warnings = self.detect_conflicts(due)
+
         resolved = self.resolve_conflicts(due)
         ordered = self.sort_tasks(resolved)
 
-        plan = DailyPlan(date=day)
         reasons: list[str] = []
 
         current = _to_minutes(self.owner.available_start)

@@ -31,6 +31,8 @@ I chose `Owner`, `Pet`, and `Task` as data holders, a `Scheduler` engine that so
 - Describe one tradeoff your scheduler makes.
 - Why is that tradeoff reasonable for this scenario?
 
+My scheduler uses a greedy fill that packs tasks by priority until the time budget runs out, so it can skip a large high-priority task in favor of smaller lower-priority ones that happen to fit. This is reasonable here because a pet owner benefits more from completing several quick essential tasks than from spending the whole window on one long one.
+
 ---
 
 ## 3. AI Collaboration
