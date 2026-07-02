@@ -81,19 +81,42 @@ Scheduled Grooming at 09:15 (45 min, low).
 
 ## 🧪 Testing PawPal+
 
+Run the full test suite from the project root:
+
 ```bash
-# Run the full test suite:
-pytest
-
-# Run with coverage:
-pytest --cov
+python -m pytest
 ```
 
-Sample test output:
+**What the tests cover** (`tests/test_pawpal.py`):
+
+- **Task completion** — `mark_complete()` flips a task's status.
+- **Task addition** — adding a task to a `Pet` increases its task count.
+- **Sorting correctness** — `sort_by_time()` returns tasks in chronological order, with untimed tasks last.
+- **Recurrence logic** — completing a daily task auto-creates a pending copy dated for the next day.
+- **Conflict detection** — `detect_conflicts()` flags two fixed-time tasks scheduled at the same time (and reports none when they don't overlap).
+
+Successful test run:
 
 ```
-# Paste your pytest output here
+============================= test session starts =============================
+platform win32 -- Python 3.14.6, pytest-9.1.1, pluggy-1.6.0
+rootdir: E:\Codepath AI 101\ai110-module2show-pawpal-starter
+plugins: anyio-4.14.0
+collected 6 items
+
+tests/test_pawpal.py::test_task_completion PASSED                        [ 16%]
+tests/test_pawpal.py::test_task_addition_increases_count PASSED          [ 33%]
+tests/test_pawpal.py::test_sorting_returns_chronological_order PASSED    [ 50%]
+tests/test_pawpal.py::test_recurrence_creates_next_day_instance PASSED   [ 66%]
+tests/test_pawpal.py::test_conflict_detection_flags_duplicate_times PASSED [ 83%]
+tests/test_pawpal.py::test_no_conflict_when_times_do_not_overlap PASSED  [100%]
+
+============================== 6 passed in 0.02s ==============================
 ```
+
+**Confidence Level: ★★★☆☆ (3/5)**
+
+The core logic — completion, sorting, recurrence, and conflict detection — is covered and passing, so I'm confident those behaviors work as designed. It's a 3 rather than higher because the tests don't yet cover the end-to-end `generate_plan()` packing (time-budget and window edge cases), weekly recurrence, or the Streamlit UI layer. Adding those would raise confidence to 4–5 stars.
 
 ## 📐 Smarter Scheduling
 
