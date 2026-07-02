@@ -15,8 +15,7 @@ I chose `Owner`, `Pet`, and `Task` as data holders, a `Scheduler` engine that so
 
 **b. Design changes**
 
-- Did your design change during implementation?
-- If yes, describe at least one change and why you made it.
+- My design did not change
 
 ---
 
